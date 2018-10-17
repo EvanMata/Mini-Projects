@@ -1,0 +1,226 @@
+'''
+Fire Embelem Hero's (FEH) Modeling Simulation
+
+Overview:
+
+In FEH, you "summon" heros from a pool using a currency called orbs. 
+Hero's are worthwhile (5*) or not.
+Hero's come in 4 colors/types: red, green, blue, or colorless. 
+When you summon, you will have 5 random stones/cards - they can be in any 
+combination of the four colors. So when you summon, you could have 5 colorless
+stones, or 2 reds, 1 blue, 1 green, and 1 colorless. You do NOT know 
+the distribution of colors prior to spending at least 5 orbs. More on this*,
+as the distribution of the stones is NOT 1/4 to each.
+Pulling repeatedly from the same hand of stones gets discounted prices; 
+entering the initial 5 orbs gets you one pick, the 2nd-4th picks are all
+4 obs, whereas the 5th pick only costs 3 orbs. 
+In summons, you summon from a banner - a choice of some specific worthwhile
+heros. These hero's could all be one color, or could be distributed amongst
+multiple colors. There is typically (always?) 3 or 4 specific worthwhile heros
+on a given banner. We will be modelling with 4, though 3 is a simple change.
+When summoning from a banner there is also a given chance of summoning a 
+worthwhile hero not listed on that banner. 
+The chances of getting a worthwhile hero increases every 5 non-worthwhile
+hero pull. This increase is incremental, so pulling once would not change
+the odds. This increase also happens if you pull 5 times from different
+hands, but could decrease your orbs/hero efficency. Finally, it happens only
+after a set of stones is complete.
+
+Example: You want a specific worthwhile green hero on the banner. You spend
+your first 5 orbs, and get a distribution of 1 red stone, 2 greens, 
+and 2 blues. You spend your first pull (the 5 buyin) and then pull the other
+green for 4 - neither got a worthwhile hero. You stop summoning, and restart.
+This second set has 4 greens and one colorless. You pull the greens for 5, 4, 
+4, and 4 orbs respectively. Your chances are the same for each pull but, if
+you got no worthwhile heros, then your next round the odds of picking them will
+increase. Your odds of picking a general worthwhile hero in general will
+also increase. 
+
+We will be exploring the distribution of orbs necessary to summon a specific
+worthwhile hero from a banner where that hero is listed. We will be assuming
+that there are 4 worthwhile heros on the banner, and that there is one of each
+color. 
+
+
+*In actuality, there are uneven numbers of heros (worthwhile and not) for each
+color. This affects the distribution of orbs appearing in a summon. 
+'''
+
+import numpy as np
+
+#Base values that are the same for all banners: 
+focus = 0.03
+worth = 0.03
+#Non-worthwhile are divided into 3* and 4*.
+Four_star = 0.58
+Three_star = 0.36
+
+'''
+In the event you wish to change this for other summoning events, these are
+the parameters that change between summons and affect things. Namely, the
+number of each color that are non-specific worthwhile heros, 4*, and 3*.
+'''
+#The 5star values do NOT include the heros on the banner.
+#Halloween distribution numbers.
+r5star = 36
+r4star = 32
+r3star = 28
+g5star = 17
+g4star = 19
+g3star = 18
+b5star = 24
+b4star = 29
+b3star = 25
+c5star = 15
+c4star = 28
+c3star = 25
+#Number of heros on the banner - assuming no overlapping colors.
+banner_num = 4
+#The color of the unique worthwhile hero you are targeting. 
+#Use either "red", "blue", "green", or "colorless"
+target_color = 'red'
+
+def get_cards1(num_summons):
+	'''
+	Gets the cards in a given summon set. 
+	Input: num_summons, the number of previous summons since a worthwhile hero
+	was pulled, excluding the pull of the hero and any pulled during this 
+	current round. 
+	'''
+	prob_mod = int(num_summons / 5) 
+	spec_5 = focus + prob_mod * 0.25
+	worthwhile = worth + prob_mod * 0.25
+	#Prob increase for the worthwhiles is decreased (uneverly) from others.
+	Four_prob = Four_star - prob_mod * 0.31
+	Three_prob = Three_star - prob_mod * 0.19
+	#1 b.c. assuming no more than one of a color on the banner.
+	red_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(r5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(r4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(r3star) / (r3star + g3star + b3star + c3star))
+	green_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(g5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(g4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(g3star) / (r3star + g3star + b3star + c3star))
+	blue_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(b5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(b4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(b3star) / (r3star + g3star + b3star + c3star))
+	colorless_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(c5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(c4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(c3star) / (r3star + g3star + b3star + c3star))
+	probs = [red_prob, green_prob, blue_prob, colorless_prob]
+	#Note that FEH websites show probabilities rounded to 2 decimal places.
+	#This can leave a tiny chance the output probabilities don't sum to 1. 
+	#I do not know how FEH handles this case.
+	cards = []
+	for i in range(5):
+		num = np.random.random()
+		if num < red_prob:
+			cards.append('red')
+		elif num < red_prob + green_prob:
+			cards.append('green')
+		elif num < red_prob + green_prob + blue_prob:
+			cards.append('blue')
+		elif num < red_prob + green_prob + blue_prob + colorless_prob:
+			cards.append('colorless')
+		else:
+			print("Super rare case has occured, please repeat.")
+
+	'''
+	a = sum(probs)
+	print(a)
+	outputs = []
+	for prob in probs:
+		out = round(prob, 4)
+		outputs.append(out)
+	return outputs
+	'''
+
+	return cards
+
+def get_cards2(num_summons):
+	'''
+	Similar results as get_dist..1 except that it calculates the cards
+	differently.
+	'''
+	prob_mod = int(num_summons / 5) 
+	spec_5 = focus + prob_mod * 0.25
+	worthwhile = worth + prob_mod * 0.25
+	#Prob increase for the worthwhiles is decreased (uneverly) from others.
+	Four_prob = Four_star - prob_mod * 0.31
+	Three_prob = Three_star - prob_mod * 0.19
+
+	cards = []
+	for i in range(5):
+		num = np.random.random()
+		num2 = np.random.random()
+		if num < spec_5:
+			#Special worthwhile hero case.
+			#cards.append('spec')
+			if num2 < (1.0 / banner_num):
+				#1 indicates its a summon that will reset the pity rate.
+				cards.append(('Target', 5))
+			else:
+				cards.append(('Banner', 5))
+
+		elif num < spec_5 + worthwhile:
+			#Worthwhile, non-banner case.
+			#Need to keep track of color to determine if we want to pull it,
+			#even accidentally.
+			if num2 < (float(r5star) / (r5star + g5star + b5star + c5star)):
+				cards.append(("red", 5))
+			elif num2 < (float(r5star + g5star) \
+				/ (r5star + g5star + b5star + c5star)):
+				cards.append(("green", 5))
+			elif num2 < (float(r5star + g5star + b5star) \
+				/ (r5star + g5star + b5star + c5star)):
+				cards.append(("blue", 5))
+			else:
+				cards.append(("colorless", 5))
+
+		elif num < spec_5 + worthwhile + Four_prob:
+			#Adding a 4* of the appropriate color.
+			if num2 < (float(r4star) / (r4star + g4star + b4star + c4star)):
+				cards.append(("red", 4))
+			elif num2 < (float(r4star + g4star) \
+				/ (r4star + g4star + b4star + c4star)):
+				cards.append(("green", 4))
+			elif num2 < (float(r4star + g4star + b4star) \
+				/ (r4star + g4star + b4star + c4star)):
+				cards.append(("blue", 4))
+			else:
+				cards.append(("colorless", 4))
+
+		elif num < spec_5 + worthwhile + Four_prob + Three_prob:
+			#Adding a 3* of the appropriate color.
+			if num2 < (float(r3star) / (r3star + g3star + b3star + c3star)):
+				cards.append(("red", 3))
+			elif num2 < (float(r3star + g3star) \
+				/ (r3star + g3star + b3star + c3star)):
+				cards.append(("green", 3))
+			elif num2 < (float(r3star + g3star + b3star) \
+				/ (r3star + g3star + b3star + c3star)):
+				cards.append(("blue", 3))
+			else:
+				cards.append(("colorless", 3))
+		else:
+			print("Super rare case has occured, please repeat.")
+
+	return cards
+
+def get_distribution():
+	'''
+	Normally the change in worthwhile summon rate is in increments of .025%,
+	however, if you have not gotten any worthwhile heros in 120 rolls 
+	(NOT orbs) then the rate is raised to 100% chance of gettting a worthwhile
+	hero.
+	'''
+
+a = get_cards2(4)
+print(a)
+
+
+
+

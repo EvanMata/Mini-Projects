@@ -1,3 +1,6 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
 '''
 Fire Embelem Hero's (FEH) Modeling Simulation
 
@@ -46,8 +49,6 @@ color.
 color. This affects the distribution of orbs appearing in a summon. 
 '''
 
-import numpy as np
-
 #Base values that are the same for all banners: 
 focus = 0.03
 worth = 0.03
@@ -74,18 +75,23 @@ b3star = 25
 c5star = 15
 c4star = 28
 c3star = 25
-#Number of heros on the banner - assuming no overlapping colors.
-banner_num = 4
+#Banner color distribution
+banner_dist = ['red', 'green', 'blue', 'colorless']
+banner_num = len(banner_dist)
 #The color of the unique worthwhile hero you are targeting. 
 #Use either "red", "blue", "green", or "colorless"
 target_color = 'red'
+#Ensure that your first element in the banner distribution is your target.
+banner_dist.remove(target_color)
+banner_dist.insert(0, target_color)
 
-def get_cards1(num_summons):
+def get_cards(num_summons):
 	'''
-	Gets the cards in a given summon set. 
+	Calculates the cards a person recieves. 
 	Input: num_summons, the number of previous summons since a worthwhile hero
-	was pulled, excluding the pull of the hero and any pulled during this 
-	current round. 
+				was pulled, excluding any pulled during this current round. 
+	Returns: cards, a list of tuples representing those available. They have
+				information not known to the picker/player.
 	'''
 	prob_mod = int(num_summons / 5) 
 	spec_5 = focus + prob_mod * 0.25
@@ -93,64 +99,13 @@ def get_cards1(num_summons):
 	#Prob increase for the worthwhiles is decreased (uneverly) from others.
 	Four_prob = Four_star - prob_mod * 0.31
 	Three_prob = Three_star - prob_mod * 0.19
-	#1 b.c. assuming no more than one of a color on the banner.
-	red_prob = spec_5 * 1.0/banner_num + \
-		worthwhile * (float(r5star) / (r5star + g5star + b5star + c5star)) + \
-		Four_prob * (float(r4star) / (r4star + g4star + b4star + c4star)) + \
-		Three_prob * (float(r3star) / (r3star + g3star + b3star + c3star))
-	green_prob = spec_5 * 1.0/banner_num + \
-		worthwhile * (float(g5star) / (r5star + g5star + b5star + c5star)) + \
-		Four_prob * (float(g4star) / (r4star + g4star + b4star + c4star)) + \
-		Three_prob * (float(g3star) / (r3star + g3star + b3star + c3star))
-	blue_prob = spec_5 * 1.0/banner_num + \
-		worthwhile * (float(b5star) / (r5star + g5star + b5star + c5star)) + \
-		Four_prob * (float(b4star) / (r4star + g4star + b4star + c4star)) + \
-		Three_prob * (float(b3star) / (r3star + g3star + b3star + c3star))
-	colorless_prob = spec_5 * 1.0/banner_num + \
-		worthwhile * (float(c5star) / (r5star + g5star + b5star + c5star)) + \
-		Four_prob * (float(c4star) / (r4star + g4star + b4star + c4star)) + \
-		Three_prob * (float(c3star) / (r3star + g3star + b3star + c3star))
-	probs = [red_prob, green_prob, blue_prob, colorless_prob]
-	#Note that FEH websites show probabilities rounded to 2 decimal places.
-	#This can leave a tiny chance the output probabilities don't sum to 1. 
-	#I do not know how FEH handles this case.
-	cards = []
-	for i in range(5):
-		num = np.random.random()
-		if num < red_prob:
-			cards.append('red')
-		elif num < red_prob + green_prob:
-			cards.append('green')
-		elif num < red_prob + green_prob + blue_prob:
-			cards.append('blue')
-		elif num < red_prob + green_prob + blue_prob + colorless_prob:
-			cards.append('colorless')
-		else:
-			print("Super rare case has occured, please repeat.")
-
-	'''
-	a = sum(probs)
-	print(a)
-	outputs = []
-	for prob in probs:
-		out = round(prob, 4)
-		outputs.append(out)
-	return outputs
-	'''
-
-	return cards
-
-def get_cards2(num_summons):
-	'''
-	Similar results as get_dist..1 except that it calculates the cards
-	differently.
-	'''
-	prob_mod = int(num_summons / 5) 
-	spec_5 = focus + prob_mod * 0.25
-	worthwhile = worth + prob_mod * 0.25
-	#Prob increase for the worthwhiles is decreased (uneverly) from others.
-	Four_prob = Four_star - prob_mod * 0.31
-	Three_prob = Three_star - prob_mod * 0.19
+	#After the 120th summon, the pity rate increases to 100%. It is unclear
+	#if this is 100% banner, 100% worthwhile, or split. We assume split.
+	if num_summons >= 120:
+		spec_5 = 0.5
+		worthwhile = 0.5
+		Four_prob = 0
+		Three_prob = 0
 
 	cards = []
 	for i in range(5):
@@ -158,12 +113,12 @@ def get_cards2(num_summons):
 		num2 = np.random.random()
 		if num < spec_5:
 			#Special worthwhile hero case.
-			#cards.append('spec')
 			if num2 < (1.0 / banner_num):
-				#1 indicates its a summon that will reset the pity rate.
-				cards.append(('Target', 5))
+				cards.append((target_color, 7))
 			else:
-				cards.append(('Banner', 5))
+				#Recall we explicitly moved the target color to the front.
+				rnd = np.random.randint(1, len(banner_dist))
+				cards.append((banner_dist[rnd], 6))
 
 		elif num < spec_5 + worthwhile:
 			#Worthwhile, non-banner case.
@@ -210,17 +165,208 @@ def get_cards2(num_summons):
 
 	return cards
 
-def get_distribution():
+def one_game(color):
 	'''
-	Normally the change in worthwhile summon rate is in increments of .025%,
-	however, if you have not gotten any worthwhile heros in 120 rolls 
-	(NOT orbs) then the rate is raised to 100% chance of gettting a worthwhile
-	hero.
+	Repeatidly summons until the target is chosen.
+	inputs: color, a specific string of the target's color. 
+	'''
+	orbs_spent = 0
+	num_summons = 0
+	total_num_summons = 0
+	got_Target = False
+	all_cards = []
+	'''
+	Pick my cards
+	'''
+	while not got_Target:
+		cards_gotten = 0
+		cards_picked = []
+		colors = set()
+		cards = get_cards(num_summons)
+		for card in cards:
+			card_color = card[0]
+			colors.add(card_color)
+			if card_color == color:
+				cards_picked.append(card)
+				all_cards.append(card)
+				cards_gotten += 1
+		
+		'''
+		Adjusting metrics based on your picks.
+		Case 1 is where none of the target's orb color shower up, but you've
+		already	spent 5 orbs, and now risk breaking your increased rate 
+		by picking a worthwhile hero who isn't your target. We minimize the 
+		chances of doing so by picking a color not on the banner, if possible.
+		'''
+		if cards_gotten == 0:
+			banner = set(banner_dist)
+			colors -= banner 
+			#Case where the banner has every color in the hand.
+			if len(colors) == 0:
+				picked_card = cards[np.random.randint(5)]
+				cards_picked.append(picked_card)
+				all_cards.append(picked_card)
+			#Case where theres some remaining colors.
+			else: 
+				for card in cards:
+					card_color = card[0]
+					if card_color in colors:
+						picked_card = card
+						cards_picked.append(picked_card)
+						all_cards.append(picked_card)
+						break
+			orbs_spent += 5
+			num_summons += 1
+		elif cards_gotten == 1:
+			orbs_spent += 5
+			num_summons += cards_gotten
+		elif cards_gotten <= 4:
+			orbs_spent += (cards_gotten * 4) + 1
+			num_summons += cards_gotten
+		else: 
+			orbs_spent += 20 #5 + 4 + 4 + 3 + 3 = 20, decreasing costs.
+			num_summons += cards_gotten
+
+		'''
+		Ajust to any special picks.
+		'''
+		for card in cards_picked:
+			identity = card[1]
+			if identity >= 5:
+				#Keep track of the total number of summons.
+				total_num_summons += num_summons
+				#However, num_summons is used to set the rates, so reset to 0.
+				num_summons = 0
+				if identity == 7:
+					got_Target = True
+				
+	return total_num_summons, orbs_spent, all_cards
+
+
+def info(N, color):
+	'''
+	Calculates the average number of orbs necessary to get the Target hero,
+	the distribution of orbs necessary, and other information.
+	inputs: N, an int that represents the number of trials you want to 
+				calculate your average from. Error decreases as sqrt(N).
+			color, a specific string of the target's color. 
 	'''
 
-a = get_cards2(4)
-print(a)
+	color = color.strip()
+	color = color.lower()
+	color_vals = ['red', 'green', 'blue', 'colorless']
+	if color not in color_vals:
+		print("The input color is not valid.")
+		return 0, 0, 0
+
+	orb_vals = []
+	summons_total = 0
+	total_orbs = 0
+	for i in range(N):
+		total_num_summons, orbs_spent, all_cards = \
+			one_game(color)
+		summons_total += total_num_summons
+		total_orbs += orbs_spent
+		orb_vals.append(orbs_spent)
+
+	summons_avg = summons_total / float(N)
+	orbs_avg = total_orbs / float(N)
+	avg_cost = orbs_avg / summons_avg
+
+	#Show the distribution.
+	#The data extends past M = 300 orbs, but those occurances are very rare.
+	M = 300
+	bins = np.linspace(0, M, M + 1)
+	plt.hist(orb_vals, bins, color = 'r')
+	plt.xlabel("Orbs Spent")
+	plt.ylabel("Count")
+	plt.title("Orb Distribution")
+	plt.show()
+
+	return summons_avg, orbs_avg, avg_cost
 
 
+def check(num_summons):
+	'''
+	Computes the occurance rates of various orb colors, which is public info
+	and hence acts as a check that all inputs are correct. 
+	Input: num_summons, the number of previous summons since a worthwhile hero
+	was pulled, excluding any pulled during this current round. 
+	'''
+	prob_mod = int(num_summons / 5) 
+	spec_5 = focus + prob_mod * 0.25
+	worthwhile = worth + prob_mod * 0.25
+	#Prob increase for the worthwhiles is decreased (uneverly) from others.
+	Four_prob = Four_star - prob_mod * 0.31
+	Three_prob = Three_star - prob_mod * 0.19
+	#1 b.c. assuming no more than one of a color on the banner.
+	red_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(r5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(r4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(r3star) / (r3star + g3star + b3star + c3star))
+	green_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(g5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(g4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(g3star) / (r3star + g3star + b3star + c3star))
+	blue_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(b5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(b4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(b3star) / (r3star + g3star + b3star + c3star))
+	colorless_prob = spec_5 * 1.0/banner_num + \
+		worthwhile * (float(c5star) / (r5star + g5star + b5star + c5star)) + \
+		Four_prob * (float(c4star) / (r4star + g4star + b4star + c4star)) + \
+		Three_prob * (float(c3star) / (r3star + g3star + b3star + c3star))
+	probs = [red_prob, green_prob, blue_prob, colorless_prob]
+	#Note that FEH websites show probabilities rounded to 2 decimal places.
+	#This can leave a tiny chance the output probabilities don't sum to 1. 
+
+	#Hand simulation, can return this instead for a statistical comparison.
+	cards = []
+	for i in range(5):
+		num = np.random.random()
+		if num < red_prob:
+			cards.append('red')
+		elif num < red_prob + green_prob:
+			cards.append('green')
+		elif num < red_prob + green_prob + blue_prob:
+			cards.append('blue')
+		elif num < red_prob + green_prob + blue_prob + colorless_prob:
+			cards.append('colorless')
+		else:
+			print("Super rare case has occured, please repeat.")
+
+	a = sum(probs)
+	print(a)
+	outputs = []
+	for prob in probs:
+		out = round(prob, 4)
+		outputs.append(out)
+	return outputs
+	#return cards
 
 
+'''
+A good estimate for N for a graph of orbs spent vs count(orbs spent), ie
+seeing the distribution: 
+
+Its very rare to get 600 orbs spent without getting your banner pick. Suppose
+we want 20 picks in an average column, we need only N=12000 trials. Of course,
+it should not be a uniform distribution - we expect more interesting behaviour
+at relatively lower numbers of orbs - say 5-150.
+'''
+
+a, b, c = info(12000, target_color)
+print(a, b, c)
+
+
+'''
+A few interesting results: 
+One, as expected, it's clearly not uniform. It has a nice long smooth tail,
+however the early distribution is not at all smooth. This is a result of rates
+changing in a stepwise manner. 
+Two, there is a clear dip between two peaks. This represents accidentally
+summons a 5* hero of your target color that is not your actual target.
+Other information we could easily extract: avg number of 4* or 3*'s gotten, 
+avg number of worthwhile's gotten beforehand.
+Easy future modifications: choose more than one target.
+'''

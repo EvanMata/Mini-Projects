@@ -1,7 +1,7 @@
 # Mini-Projects
 Smaller individual projects:
 
-Connect 4 (With ok AI algorithm)
+Connect 4 (With rules based algorithm)
 
 Schelling House Segregation Model (With visualization)
 
